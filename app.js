@@ -12,6 +12,8 @@ const theadRow = document.getElementById("theadRow");
 const tbody = document.getElementById("tbody");
 const resultsList = document.getElementById("resultsList");
 const detailPane = document.getElementById("detailPane");
+const detailOverlay = document.getElementById("detailOverlay");
+const btnCloseDetail = document.getElementById("btnCloseDetail");
 const resultsFooter = document.getElementById("resultsFooter");
 const btnManage = document.getElementById("btnManage");
 const btnHelp = document.getElementById("btnHelp");
@@ -44,6 +46,13 @@ function buildTableHeader() {
   }
 }
 
+
+function openDetailOverlay(){
+  if (detailOverlay) detailOverlay.style.display = "block";
+}
+function closeDetailOverlay(){
+  if (detailOverlay) detailOverlay.style.display = "none";
+}
 function renderDetail(item) {
   if (!item) {
     detailPane.innerHTML = '<div class="small">Select an item to view all fields.</div>';
@@ -98,6 +107,14 @@ async function loadMeta() {
   metaRangesBySupplier = new Map(rangesArr);
 }
 
+function itemIdSortKey(v){
+  const s = safe(v).trim();
+  const n = parseInt(s, 10);
+  if (!isNaN(n) && String(n) === s.replace(/^0+/, "") || s.match(/^0+\d+$/)) return {type:0, n:n, s:s};
+  if (!isNaN(n)) return {type:0, n:n, s:s};
+  return {type:1, n:0, s:s.toLowerCase()};
+}
+
 function rowMatchesSearch(item, q) {
   if (!q) return true;
   const fields = ["ItemID","ModelNum","Description","Description2","Description3","SKU"];
@@ -122,6 +139,8 @@ function renderResults(items) {
     tr.addEventListener("click", async () => {
       selectedPk = safe(it._pk);
       renderDetail(await getItem(db, selectedPk));
+      openDetailOverlay();
+      openDetailOverlay();
       highlightSelected();
     });
     for (const c of DISPLAY_COLS) {
@@ -140,6 +159,8 @@ function renderResults(items) {
     div.addEventListener("click", async () => {
       selectedPk = safe(it._pk);
       renderDetail(await getItem(db, selectedPk));
+      openDetailOverlay();
+      openDetailOverlay();
       highlightSelected();
     });
 
@@ -186,6 +207,15 @@ async function refreshResults() {
   } else {
     base = await listBySupplier(db, supplier, 5000);
   }
+
+  // Default sort: ItemID numeric ascending (non-numeric at the end)
+  base.sort((a,b)=>{
+    const ka=itemIdSortKey(a.ItemID);
+    const kb=itemIdSortKey(b.ItemID);
+    if (ka.type !== kb.type) return ka.type - kb.type;
+    if (ka.type === 0) return ka.n - kb.n;
+    return ka.s.localeCompare(kb.s);
+  });
 
   const filtered = q ? base.filter(it => rowMatchesSearch(it, q)) : base;
   renderResults(filtered);

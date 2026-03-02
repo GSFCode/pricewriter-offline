@@ -54,27 +54,31 @@
 </header>
 
 <main>
-  <div class="split">
-    <div class="card">
-      <h2>Results</h2>
-      <div class="tableWrap">
-        <table id="resultsTable">
-          <thead><tr id="theadRow"></tr></thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-      <div class="list" id="resultsList"></div>
-      <div class="footer" id="resultsFooter"></div>
+  <div class="card">
+    <h2>Results</h2>
+    <div class="tableWrap">
+      <table id="resultsTable">
+        <thead><tr id="theadRow"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
     </div>
-
-    <div class="card">
-      <h2>Item detail (fields in your exact order)</h2>
-      <div class="detail" id="detailPane">
-        <div class="small">Select an item to view all fields.</div>
-      </div>
-    </div>
+    <div class="list" id="resultsList"></div>
+    <div class="footer" id="resultsFooter"></div>
   </div>
 </main>
+
+<!-- Detail overlay (opens when you tap a row) -->
+<div id="detailOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:50;">
+  <div style="background:#fff; max-width:980px; margin: 24px auto; border-radius:14px; overflow:hidden; border:1px solid #e5e5e5;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #e5e5e5;">
+      <div style="font-weight:700;">Item detail</div>
+      <button class="btn" id="btnCloseDetail">Close</button>
+    </div>
+    <div class="detail" id="detailPane">
+      <div class="small">Select an item to view all fields.</div>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module" src="./app.js"></script>
