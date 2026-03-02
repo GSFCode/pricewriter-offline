@@ -24,7 +24,7 @@
 
     <div class="row">
       <div>
-        <label>Supplier</label><br/>
+        <label>Supplier (sorted by SupplierName)</label><br/>
         <select id="supplierSel" style="min-width:260px;">
           <option value="">Select supplier…</option>
         </select>
@@ -63,7 +63,6 @@
           <tbody id="tbody"></tbody>
         </table>
       </div>
-
       <div class="list" id="resultsList"></div>
       <div class="footer" id="resultsFooter"></div>
     </div>
@@ -77,7 +76,6 @@
   </div>
 </main>
 
-<!-- XLSX parser (cached by service worker after first load) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module" src="./app.js"></script>
 </body>

@@ -4,18 +4,15 @@ const DB_VERSION = 1;
 export function openDb() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
+    req.onupgradeneeded = () => {
       const db = req.result;
 
-      // items store
       if (!db.objectStoreNames.contains("items")) {
         const store = db.createObjectStore("items", { keyPath: "ItemID" });
         store.createIndex("bySupplier", "SupplierName", { unique: false });
         store.createIndex("byRange", "Range", { unique: false });
         store.createIndex("bySupplierRange", ["SupplierName","Range"], { unique: false });
       }
-
-      // metadata store
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta", { keyPath: "key" });
       }
@@ -47,7 +44,6 @@ export async function clearAll(db){
   await new Promise((resolve,reject)=>{
     const tx=db.transaction(["items","meta"],"readwrite");
     tx.objectStore("items").clear();
-    // keep meta? no, wipe all
     tx.objectStore("meta").clear();
     tx.oncomplete=()=>resolve(true);
     tx.onerror=()=>reject(tx.error);
@@ -59,8 +55,7 @@ export async function bulkPutItems(db, items){
     const tx=db.transaction("items","readwrite");
     const store=tx.objectStore("items");
     for(const it of items){
-      // Ensure ItemID is string
-      if (it.ItemID === undefined || it.ItemID === null || it.ItemID === "") continue;
+      if (!it.ItemID) continue;
       store.put(it);
     }
     tx.oncomplete=()=>resolve(true);
@@ -86,7 +81,7 @@ export async function getItem(db, itemId){
   });
 }
 
-export async function listBySupplierRange(db, supplierName, rangeValue, limit=500){
+export async function listBySupplierRange(db, supplierName, rangeValue, limit=5000){
   return new Promise((resolve,reject)=>{
     const tx=db.transaction("items","readonly");
     const idx=tx.objectStore("items").index("bySupplierRange");
@@ -106,7 +101,7 @@ export async function listBySupplierRange(db, supplierName, rangeValue, limit=50
   });
 }
 
-export async function listBySupplier(db, supplierName, limit=500){
+export async function listBySupplier(db, supplierName, limit=5000){
   return new Promise((resolve,reject)=>{
     const tx=db.transaction("items","readonly");
     const idx=tx.objectStore("items").index("bySupplier");

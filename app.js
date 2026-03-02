@@ -3,7 +3,6 @@ import { openDb, getMeta, setMeta, clearAll, bulkPutItems, countItems, getItem, 
 const DISPLAY_COLS = ["ItemID", "ModelNum", "Description", "Description2", "Description3", "Cost", "Mrp", "Sell", "$Sell2", "$Sell3", "$Trade1", "$Trade2", "$Trade3", "DC", "SC", "RC", "IC", "GC", "CC", "ItemDescription", "GradeDescription", "ColourDescription", "Op1", "Op2", "Op3", "Op4", "Op5", "Delivery", "SKU", "Group", "Feature1", "Feature2", "Feature3", "SupplierName", "SupplierDebrand", "Range", "Renamed"];
 const HIDDEN_COLS = ["Barcode"];
 
-// Elements
 const supplierSel = document.getElementById("supplierSel");
 const rangeSel = document.getElementById("rangeSel");
 const searchBox = document.getElementById("searchBox");
@@ -18,21 +17,27 @@ const btnManage = document.getElementById("btnManage");
 const btnHelp = document.getElementById("btnHelp");
 
 let db;
-let metaSuppliers = []; // array of {SupplierName, SupplierDebrand}
-let metaRangesBySupplier = new Map(); // SupplierName -> array of {Range, Renamed}
+let metaSuppliers = [];
+let metaRangesBySupplier = new Map();
 let selectedItemId = null;
 
-function setStatus(msg) {
-  statusBox.textContent = msg;
-}
+function setStatus(msg) { statusBox.textContent = msg; }
 
 function safe(v) {
   if (v === undefined || v === null) return "";
   return String(v);
 }
 
-function normalize(s) {
-  return safe(s).toLowerCase();
+function normalize(s) { return safe(s).toLowerCase(); }
+function trimVal(v) { return safe(v).trim(); }
+
+function escapeHtml(str) {
+  return safe(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
 }
 
 function buildTableHeader() {
@@ -49,8 +54,6 @@ function renderDetail(item) {
     detailPane.innerHTML = '<div class="small">Select an item to view all fields.</div>';
     return;
   }
-
-  // show supplier debrand + renamed as "selected context"
   const sup = metaSuppliers.find(x => x.SupplierName === item.SupplierName);
   const supplierLabel = sup ? `${sup.SupplierName} — ${sup.SupplierDebrand || ""}` : safe(item.SupplierName);
 
@@ -62,21 +65,10 @@ function renderDetail(item) {
   html += `<div class="section"><div class="small"><b>Supplier</b>: ${escapeHtml(supplierLabel)}<br/><b>Range</b>: ${escapeHtml(rangeLabel)}</div></div>`;
   html += `<div class="section"><div class="kv">`;
   for (const c of DISPLAY_COLS) {
-    const k = escapeHtml(c);
-    const v = escapeHtml(safe(item[c]));
-    html += `<div class="k">${k}</div><div class="v">${v}</div>`;
+    html += `<div class="k">${escapeHtml(c)}</div><div class="v">${escapeHtml(safe(item[c]))}</div>`;
   }
   html += `</div></div>`;
   detailPane.innerHTML = html;
-}
-
-function escapeHtml(str) {
-  return safe(str)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#39;");
 }
 
 function populateSupplierDropdown() {
@@ -84,8 +76,7 @@ function populateSupplierDropdown() {
   for (const s of metaSuppliers) {
     const opt = document.createElement("option");
     opt.value = s.SupplierName;
-    const label = s.SupplierDebrand ? `${s.SupplierName} — ${s.SupplierDebrand}` : s.SupplierName;
-    opt.textContent = label;
+    opt.textContent = s.SupplierDebrand ? `${s.SupplierName} — ${s.SupplierDebrand}` : s.SupplierName;
     supplierSel.appendChild(opt);
   }
 }
@@ -93,9 +84,7 @@ function populateSupplierDropdown() {
 function populateRangeDropdown(supplierName) {
   rangeSel.innerHTML = '<option value="">All ranges…</option>';
   if (!supplierName) return;
-
   const ranges = metaRangesBySupplier.get(supplierName) || [];
-  // de-dupe by Range+Renamed
   const seen = new Set();
   for (const rr of ranges) {
     const key = `${rr.Range}|||${rr.Renamed}`;
@@ -116,22 +105,28 @@ async function loadMeta() {
 
 function rowMatchesSearch(item, q) {
   if (!q) return true;
-  // Search everything EXCEPT Barcode display; still allow matching barcode? user said no barcode display; safest: don't search it either.
   const fields = ["ItemID","ModelNum","Description","Description2","Description3","SKU"];
   const hay = fields.map(f => normalize(item[f])).join(" | ");
   return hay.includes(q);
 }
 
+function highlightSelected() {
+  for (const tr of tbody.querySelectorAll("tr")) {
+    tr.style.outline = (tr.dataset.itemid === selectedItemId) ? "2px solid #000" : "none";
+  }
+  for (const div of resultsList.querySelectorAll(".item")) {
+    div.style.outline = (div.dataset.itemid === selectedItemId) ? "2px solid #000" : "none";
+  }
+}
+
 function renderResults(items) {
-  // Table (iPad / desktop)
   tbody.innerHTML = "";
   for (const it of items) {
     const tr = document.createElement("tr");
     tr.dataset.itemid = safe(it.ItemID);
     tr.addEventListener("click", async () => {
       selectedItemId = safe(it.ItemID);
-      const full = await getItem(db, selectedItemId);
-      renderDetail(full);
+      renderDetail(await getItem(db, selectedItemId));
       highlightSelected();
     });
     for (const c of DISPLAY_COLS) {
@@ -142,7 +137,6 @@ function renderResults(items) {
     tbody.appendChild(tr);
   }
 
-  // Phone list
   resultsList.innerHTML = "";
   for (const it of items) {
     const div = document.createElement("div");
@@ -150,12 +144,10 @@ function renderResults(items) {
     div.dataset.itemid = safe(it.ItemID);
     div.addEventListener("click", async () => {
       selectedItemId = safe(it.ItemID);
-      const full = await getItem(db, selectedItemId);
-      renderDetail(full);
+      renderDetail(await getItem(db, selectedItemId));
       highlightSelected();
     });
 
-    // Compact summary: ItemID, ModelNum, Sell, Cost, Description, SKU, Delivery
     const line1Left = `${safe(it.ItemID)} | ${safe(it.ModelNum)}`;
     const sell = safe(it.Sell);
     const cost = safe(it.Cost);
@@ -180,15 +172,6 @@ function renderResults(items) {
   highlightSelected();
 }
 
-function highlightSelected() {
-  for (const tr of tbody.querySelectorAll("tr")) {
-    tr.style.outline = (tr.dataset.itemid === selectedItemId) ? "2px solid #000" : "none";
-  }
-  for (const div of resultsList.querySelectorAll(".item")) {
-    div.style.outline = (div.dataset.itemid === selectedItemId) ? "2px solid #000" : "none";
-  }
-}
-
 async function refreshResults() {
   const supplier = supplierSel.value;
   const range = rangeSel.value;
@@ -204,14 +187,14 @@ async function refreshResults() {
   setStatus("Searching…");
   let base = [];
   if (range) {
-    base = await listBySupplierRange(db, supplier, range, 800);
+    base = await listBySupplierRange(db, supplier, range, 5000);
   } else {
-    base = await listBySupplier(db, supplier, 800);
+    base = await listBySupplier(db, supplier, 5000);
   }
 
   const filtered = q ? base.filter(it => rowMatchesSearch(it, q)) : base;
   renderResults(filtered);
-  setStatus(`Loaded. Supplier: ${supplier}${range ? " · Range: " + range : ""} · Records scanned: ${base.length} (showing up to 800)`);
+  setStatus(`Loaded. Supplier: ${supplier}${range ? " · Range: " + range : ""} · Records scanned: ${base.length} (showing up to 5000)`);
 }
 
 function showHelp() {
@@ -222,7 +205,7 @@ function showHelp() {
 3) After import, it works offline.
 
 Filtering:
-- Supplier shows "SupplierName — SupplierDebrand"
+- Supplier is sorted by SupplierName and shows "SupplierName — SupplierDebrand"
 - Range shows "Range — Renamed" and filters by Range
 - Barcode is hidden and not searched.
 
@@ -243,6 +226,17 @@ async function importXlsxFlow() {
   input.click();
 }
 
+function buildHeaderMap(rows) {
+  const map = new Map();
+  if (!rows || rows.length === 0) return map;
+  const keys = Object.keys(rows[0] || {});
+  const normToActual = new Map(keys.map(k => [k.trim(), k]));
+  for (const col of DISPLAY_COLS.concat(Array.from(HIDDEN_COLS))) {
+    if (normToActual.has(col)) map.set(col, normToActual.get(col));
+  }
+  return map;
+}
+
 async function importXlsxFile(file) {
   if (!window.XLSX) {
     alert("XLSX parser library didn’t load. Open once while online, then try again.");
@@ -252,9 +246,7 @@ async function importXlsxFile(file) {
   setStatus("Reading XLSX…");
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
-
-  // Prefer Sheet2 as you said
-  let sheetName = wb.SheetNames.find(n => n.toLowerCase() === "sheet2") || wb.SheetNames[0];
+  const sheetName = wb.SheetNames.find(n => n.toLowerCase() === "sheet2") || wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
   if (!ws) {
     alert("Could not find the sheet to import.");
@@ -263,14 +255,11 @@ async function importXlsxFile(file) {
 
   setStatus(`Parsing ${sheetName}…`);
   const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-
-  // Normalize keys to match expected columns
-  // Some exports may include weird whitespace in headers; attempt to map exact names.
   const headerMap = buildHeaderMap(rows);
 
   const items = [];
-  const suppliersMap = new Map(); // SupplierName -> SupplierDebrand
-  const rangesMap = new Map(); // SupplierName -> Map(rangeKey -> {Range,Renamed})
+  const suppliersMap = new Map();
+  const rangesMap = new Map();
 
   for (const r of rows) {
     const it = {};
@@ -279,32 +268,33 @@ async function importXlsxFile(file) {
       it[col] = safe(r[key]);
     }
 
-    // Require ItemID
+    // Trim key fields so filters match exactly (common issue with exports)
+    it.SupplierName = trimVal(it.SupplierName);
+    it.SupplierDebrand = trimVal(it.SupplierDebrand);
+    it.Range = trimVal(it.Range);
+    it.Renamed = trimVal(it.Renamed);
+    it.ItemID = trimVal(it.ItemID);
+    it.ModelNum = trimVal(it.ModelNum);
+    it.SKU = trimVal(it.SKU);
+
     if (!it.ItemID) continue;
 
-    // Track supplier + range
-    const sName = safe(it.SupplierName);
-    const sDeb = safe(it.SupplierDebrand);
-    if (sName) {
-      if (!suppliersMap.has(sName)) suppliersMap.set(sName, sDeb);
-    }
-    const rangeVal = safe(it.Range);
-    const renamed = safe(it.Renamed);
+    const sName = it.SupplierName;
+    const sDeb = it.SupplierDebrand;
+    if (sName && !suppliersMap.has(sName)) suppliersMap.set(sName, sDeb);
 
     if (sName) {
       if (!rangesMap.has(sName)) rangesMap.set(sName, new Map());
-      const k = `${rangeVal}|||${renamed}`;
-      if (!rangesMap.get(sName).has(k)) rangesMap.get(sName).set(k, { Range: rangeVal, Renamed: renamed });
+      const k = `${it.Range}|||${it.Renamed}`;
+      if (it.Range && !rangesMap.get(sName).has(k)) rangesMap.get(sName).set(k, { Range: it.Range, Renamed: it.Renamed });
     }
 
     items.push(it);
   }
 
-  // Write to DB
   setStatus("Saving offline database…");
   await clearAll(db);
 
-  // chunk inserts to keep UI responsive
   const chunkSize = 1500;
   for (let i=0;i<items.length;i+=chunkSize) {
     await bulkPutItems(db, items.slice(i, i+chunkSize));
@@ -312,14 +302,12 @@ async function importXlsxFile(file) {
     await new Promise(r => setTimeout(r, 0));
   }
 
-  // Save meta
   const suppliers = Array.from(suppliersMap.entries())
     .map(([SupplierName, SupplierDebrand]) => ({ SupplierName, SupplierDebrand }))
-    .sort((a,b)=> (a.SupplierDebrand||a.SupplierName).localeCompare(b.SupplierDebrand||b.SupplierName));
+    .sort((a,b)=> (a.SupplierName||"").localeCompare(b.SupplierName||""));
 
   const rangesBySupplier = Array.from(rangesMap.entries()).map(([sName, m]) => {
     const arr = Array.from(m.values())
-      .filter(x => x.Range)  // ignore blanks
       .sort((a,b)=> (a.Range||"").localeCompare(b.Range||""));
     return [sName, arr];
   });
@@ -341,29 +329,9 @@ async function importXlsxFile(file) {
   alert(`Imported ${n} items from "${sheetName}". You can now use the app offline.`);
 }
 
-function buildHeaderMap(rows) {
-  // Build a mapping from canonical col name to actual key in rows
-  const map = new Map();
-  if (!rows || rows.length === 0) return map;
-
-  const keys = Object.keys(rows[0] || {});
-  // Normalize keys by trimming
-  const normToActual = new Map(keys.map(k => [k.trim(), k]));
-
-  for (const col of DISPLAY_COLS.concat(Array.from(HIDDEN_COLS))) {
-    if (normToActual.has(col)) map.set(col, normToActual.get(col));
-  }
-  return map;
-}
-
 async function init() {
-  // service worker
   if ("serviceWorker" in navigator) {
-    try {
-      await navigator.serviceWorker.register("./sw.js");
-    } catch (e) {
-      // ignore
-    }
+    try { await navigator.serviceWorker.register("./sw.js"); } catch (e) {}
   }
 
   buildTableHeader();
@@ -380,7 +348,6 @@ async function init() {
     setStatus("No offline data yet. Tap Import / Replace and select your XLSX (Sheet2).");
   }
 
-  // Events
   supplierSel.addEventListener("change", async () => {
     populateRangeDropdown(supplierSel.value);
     rangeSel.value = "";
@@ -407,17 +374,12 @@ async function init() {
   });
 
   btnManage.addEventListener("click", async () => {
-    const nNow = await countItems(db);
-    const ok = confirm(
-      "Import / Replace will rebuild the offline database from an XLSX file. Continue?"
-    );
+    const ok = confirm("Import / Replace will rebuild the offline database from an XLSX file. Continue?");
     if (!ok) return;
     await importXlsxFlow();
   });
 
   btnHelp.addEventListener("click", showHelp);
-
-  // If supplier already chosen in a previous session, could restore; keeping simple.
 }
 
 init();

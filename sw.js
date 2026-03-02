@@ -1,4 +1,4 @@
-const CACHE = "pricewriter-cache-v1";
+const CACHE = "pricewriter-cache-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -33,14 +33,12 @@ self.addEventListener("fetch", (event) => {
     if (cached) return cached;
     try {
       const fresh = await fetch(req);
-      // cache successful GETs (including CDN xlsx lib) so it can work offline after first load
       if (req.method === "GET" && fresh && fresh.status === 200) {
         const cache = await caches.open(CACHE);
         cache.put(req, fresh.clone());
       }
       return fresh;
     } catch (e) {
-      // offline fallback
       return cached || new Response("Offline", { status: 503, headers: {"Content-Type":"text/plain"} });
     }
   })());
