@@ -121,3 +121,23 @@ export async function listBySupplier(db, supplierName, limit=5000){
     tx.onerror=()=>reject(tx.error);
   });
 }
+
+export async function listByRange(db, rangeValue, limit=5000){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction("items","readonly");
+    const idx=tx.objectStore("items").index("byRange");
+    const keyRange = IDBKeyRange.only(rangeValue);
+    const out=[];
+    idx.openCursor(keyRange).onsuccess=(e)=>{
+      const cur=e.target.result;
+      if(cur){
+        out.push(cur.value);
+        if(out.length>=limit){ resolve(out); return; }
+        cur.continue();
+      }else{
+        resolve(out);
+      }
+    };
+    tx.onerror=()=>reject(tx.error);
+  });
+}

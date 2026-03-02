@@ -24,17 +24,15 @@
 
     <div class="row">
       <div>
-        <label>Supplier (sorted by SupplierName)</label><br/>
-        <select id="supplierSel" style="min-width:260px;">
-          <option value="">Select supplier…</option>
-        </select>
+        <label>Supplier (type to search)</label><br/>
+        <input id="supplierInput" list="supplierList" style="min-width:260px;" placeholder="All suppliers…"/>
+        <datalist id="supplierList"></datalist>
       </div>
 
       <div>
-        <label>Range (shows Range — Renamed)</label><br/>
-        <select id="rangeSel" style="min-width:320px;">
-          <option value="">All ranges…</option>
-        </select>
+        <label>Range (type to search, shows Range — Renamed)</label><br/>
+        <input id="rangeInput" list="rangeList" style="min-width:320px;" placeholder="All ranges…"/>
+        <datalist id="rangeList"></datalist>
       </div>
 
       <div style="flex:1; min-width:240px;">

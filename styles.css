@@ -34,3 +34,6 @@ tr:hover{background:#fafafa;cursor:pointer;}
 .detail .v{font-size:13px;white-space:pre-wrap;word-break:break-word;}
 .detail .section{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
 .footer{padding:12px;color:var(--muted);font-size:12px;}
+
+.groupRow td{font-weight:700; background:#f6f6f6;}
+.groupTitle{font-weight:700; margin:12px 0 6px;}

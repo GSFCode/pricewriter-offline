@@ -1,10 +1,12 @@
-import { openDb, getMeta, setMeta, clearAll, bulkPutItems, countItems, getItem, listBySupplier, listBySupplierRange } from "./db.js";
+import { openDb, getMeta, setMeta, clearAll, bulkPutItems, countItems, getItem, listBySupplier, listBySupplierRange, listByRange } from "./db.js";
 
 const DISPLAY_COLS = ["ItemID", "ModelNum", "Description", "Description2", "Description3", "Cost", "Mrp", "Sell", "$Sell2", "$Sell3", "$Trade1", "$Trade2", "$Trade3", "DC", "SC", "RC", "IC", "GC", "CC", "ItemDescription", "GradeDescription", "ColourDescription", "Op1", "Op2", "Op3", "Op4", "Op5", "Delivery", "SKU", "Group", "Feature1", "Feature2", "Feature3", "SupplierName", "SupplierDebrand", "Range", "Renamed"];
 const HIDDEN_COLS = ["Barcode"];
 
-const supplierSel = document.getElementById("supplierSel");
-const rangeSel = document.getElementById("rangeSel");
+const supplierInput = document.getElementById("supplierInput");
+const supplierList = document.getElementById("supplierList");
+const rangeInput = document.getElementById("rangeInput");
+const rangeList = document.getElementById("rangeList");
 const searchBox = document.getElementById("searchBox");
 const btnClear = document.getElementById("btnClear");
 const statusBox = document.getElementById("statusBox");
@@ -27,6 +29,12 @@ function setStatus(msg) { statusBox.textContent = msg; }
 function safe(v) { return (v === undefined || v === null) ? "" : String(v); }
 function normalize(s) { return safe(s).toLowerCase(); }
 function trimVal(v) { return safe(v).trim(); }
+
+function parseLabelValue(v){
+  const s = trimVal(v);
+  const parts = s.split('—');
+  return trimVal(parts[0]);
+}
 
 function escapeHtml(str) {
   return safe(str)
@@ -75,30 +83,46 @@ function renderDetail(item) {
   detailPane.innerHTML = html;
 }
 
-function populateSupplierDropdown() {
-  supplierSel.innerHTML = '<option value="">Select supplier…</option>';
+function populateSupplierList() {
+  supplierList.innerHTML = "";
   for (const s of metaSuppliers) {
     const opt = document.createElement("option");
-    opt.value = s.SupplierName;
-    opt.textContent = s.SupplierDebrand ? `${s.SupplierName} — ${s.SupplierDebrand}` : s.SupplierName;
-    supplierSel.appendChild(opt);
+    opt.value = s.SupplierDebrand ? `${s.SupplierName} — ${s.SupplierDebrand}` : s.SupplierName;
+    supplierList.appendChild(opt);
   }
 }
+}
 
-function populateRangeDropdown(supplierName) {
-  rangeSel.innerHTML = '<option value="">All ranges…</option>';
-  if (!supplierName) return;
-  const ranges = metaRangesBySupplier.get(supplierName) || [];
-  const seen = new Set();
-  for (const rr of ranges) {
-    const key = `${rr.Range}|||${rr.Renamed}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+function populateRangeList(supplierName) {
+  rangeList.innerHTML = "";
+  const addOpt = (rangeVal, renamedVal) => {
+    if (!rangeVal) return;
     const opt = document.createElement("option");
-    opt.value = rr.Range; // filter by Range
-    opt.textContent = rr.Renamed ? `${rr.Range} — ${rr.Renamed}` : rr.Range;
-    rangeSel.appendChild(opt);
+    opt.value = renamedVal ? `${rangeVal} — ${renamedVal}` : rangeVal;
+    rangeList.appendChild(opt);
+  };
+
+  if (supplierName) {
+    const ranges = metaRangesBySupplier.get(supplierName) || [];
+    const seen = new Set();
+    for (const rr of ranges) {
+      const k = `${rr.Range}|||${rr.Renamed}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      addOpt(rr.Range, rr.Renamed);
+    }
+  } else {
+    const seen = new Set();
+    for (const [sName, ranges] of metaRangesBySupplier.entries()) {
+      for (const rr of (ranges || [])) {
+        const k = `${rr.Range}|||${rr.Renamed}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        addOpt(rr.Range, rr.Renamed);
+      }
+    }
   }
+}
 }
 
 async function loadMeta() {
@@ -131,7 +155,7 @@ function highlightSelected() {
   }
 }
 
-function renderResults(items) {
+function renderResults(items, groupBySupplier=false) {
   tbody.innerHTML = "";
   for (const it of items) {
     const tr = document.createElement("tr");
@@ -152,7 +176,20 @@ function renderResults(items) {
   }
 
   resultsList.innerHTML = "";
+  let lastSup2 = null;
   for (const it of items) {
+    if (groupBySupplier) {
+      const sup = safe(it.SupplierName);
+      if (sup && sup !== lastSup2) {
+        lastSup2 = sup;
+        const h = document.createElement('div');
+        h.className = 'groupTitle';
+        const supMeta = metaSuppliers.find(x => x.SupplierName === sup);
+        h.textContent = (supMeta && supMeta.SupplierDebrand) ? `${supMeta.SupplierName} — ${supMeta.SupplierDebrand}` : sup;
+        resultsList.appendChild(h);
+      }
+    }
+
     const div = document.createElement("div");
     div.className = "item";
     div.dataset.pk = safe(it._pk);
@@ -189,8 +226,10 @@ function renderResults(items) {
 }
 
 async function refreshResults() {
-  const supplier = supplierSel.value;
-  const range = rangeSel.value;
+  const supplierLabel = supplierInput.value;
+  const rangeLabel = rangeInput.value;
+  const supplier = parseLabelValue(supplierLabel);
+  const range = parseLabelValue(rangeLabel);
   const q = normalize(searchBox.value).trim();
 
   if (!supplier) {
@@ -202,10 +241,14 @@ async function refreshResults() {
 
   setStatus("Searching…");
   let base = [];
-  if (range) {
+  let groupBySupplier = false;
+  if (supplier && range) {
     base = await listBySupplierRange(db, supplier, range, 5000);
-  } else {
+  } else if (supplier && !range) {
     base = await listBySupplier(db, supplier, 5000);
+  } else if (!supplier && range) {
+    base = await listByRange(db, range, 5000);
+    groupBySupplier = true;
   }
 
   // Default sort: ItemID numeric ascending (non-numeric at the end)
@@ -218,8 +261,8 @@ async function refreshResults() {
   });
 
   const filtered = q ? base.filter(it => rowMatchesSearch(it, q)) : base;
-  renderResults(filtered);
-  setStatus(`Loaded. Supplier: ${supplier}${range ? " · Range: " + range : ""} · Records scanned: ${base.length} (showing up to 5000)`);
+  renderResults(filtered, groupBySupplier);
+  setStatus(`Loaded.${supplier ? " Supplier: " + supplier : ""}${range ? " Range: " + range : ""} · Records scanned: ${base.length} (showing up to 5000)`);
 }
 
 function showHelp() {
@@ -339,9 +382,9 @@ async function importXlsxFile(file) {
   await setMeta(db, "sheetImported", sheetName);
 
   await loadMeta();
-  populateSupplierDropdown();
-  supplierSel.value = "";
-  populateRangeDropdown("");
+  populateSupplierList();
+  supplierInput.value = "";
+  populateRangeList("");
   renderResults([]);
   renderDetail(null);
 
@@ -358,8 +401,8 @@ async function init() {
   buildTableHeader();
   db = await openDb();
   await loadMeta();
-  populateSupplierDropdown();
-  populateRangeDropdown("");
+  populateSupplierList();
+  populateRangeList("");
 
   const n = await countItems(db);
   const last = await getMeta(db, "lastImported");
@@ -370,8 +413,8 @@ async function init() {
   }
 
   supplierSel.addEventListener("change", async () => {
-    populateRangeDropdown(supplierSel.value);
-    rangeSel.value = "";
+    populateRangeList(supplierInput.value);
+    rangeInput.value = "";
     selectedPk = null;
     searchBox.value = "";
     await refreshResults();
@@ -388,11 +431,28 @@ async function init() {
   });
 
   btnClear.addEventListener("click", async () => {
-    rangeSel.value = "";
+    supplierInput.value = "";
+    rangeInput.value = "";
     searchBox.value = "";
     selectedPk = null;
+    populateRangeList("");
     await refreshResults();
   });
+
+
+  const onFiltersChanged = async () => {
+    populateRangeList(parseLabelValue(supplierInput.value));
+    selectedPk = null;
+    await refreshResults();
+  };
+  if (supplierInput) {
+    supplierInput.addEventListener("input", onFiltersChanged);
+    supplierInput.addEventListener("change", onFiltersChanged);
+  }
+  if (rangeInput) {
+    rangeInput.addEventListener("input", async () => { selectedPk = null; await refreshResults(); });
+    rangeInput.addEventListener("change", async () => { selectedPk = null; await refreshResults(); });
+  }
 
   btnManage.addEventListener("click", async () => {
     const ok = confirm("Import / Replace will rebuild the offline database from an XLSX file. Continue?");
