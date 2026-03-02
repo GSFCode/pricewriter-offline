@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PriceWriter Offline</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <div style="font-weight:800; font-size:16px;">PriceWriter Offline</div>
+        <div class="small">Offline searchable catalogue (private).</div>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnManage">Import / Replace</button>
+        <button class="btn" id="btnHelp">Help</button>
+      </div>
+    </div>
+    <div style="height:10px;"></div>
+
+    <div class="row">
+      <div>
+        <label>Supplier</label><br/>
+        <select id="supplierSel" style="min-width:260px;">
+          <option value="">Select supplier…</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Range (shows Range — Renamed)</label><br/>
+        <select id="rangeSel" style="min-width:320px;">
+          <option value="">All ranges…</option>
+        </select>
+      </div>
+
+      <div style="flex:1; min-width:240px;">
+        <label>Search</label><br/>
+        <input id="searchBox" type="search" placeholder="Search ItemID, ModelNum, Description, SKU…" />
+      </div>
+
+      <div>
+        <label>&nbsp;</label><br/>
+        <button class="btn" id="btnClear">Clear</button>
+      </div>
+    </div>
+
+    <div style="height:10px;"></div>
+    <div class="notice" id="statusBox">Loading…</div>
+  </div>
+</header>
+
+<main>
+  <div class="split">
+    <div class="card">
+      <h2>Results</h2>
+      <div class="tableWrap">
+        <table id="resultsTable">
+          <thead><tr id="theadRow"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="list" id="resultsList"></div>
+      <div class="footer" id="resultsFooter"></div>
+    </div>
+
+    <div class="card">
+      <h2>Item detail (fields in your exact order)</h2>
+      <div class="detail" id="detailPane">
+        <div class="small">Select an item to view all fields.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- XLSX parser (cached by service worker after first load) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
