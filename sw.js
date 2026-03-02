@@ -1,4 +1,4 @@
-const CACHE = "pricewriter-cache-v2";
+const CACHE = "pricewriter-cache-v3";
 const ASSETS = [
   "./",
   "./index.html",

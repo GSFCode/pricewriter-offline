@@ -1,5 +1,5 @@
 const DB_NAME = "pricewriter_offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // bump version to rebuild schema
 
 export function openDb() {
   return new Promise((resolve, reject) => {
@@ -7,15 +7,16 @@ export function openDb() {
     req.onupgradeneeded = () => {
       const db = req.result;
 
-      if (!db.objectStoreNames.contains("items")) {
-        const store = db.createObjectStore("items", { keyPath: "ItemID" });
-        store.createIndex("bySupplier", "SupplierName", { unique: false });
-        store.createIndex("byRange", "Range", { unique: false });
-        store.createIndex("bySupplierRange", ["SupplierName","Range"], { unique: false });
-      }
-      if (!db.objectStoreNames.contains("meta")) {
-        db.createObjectStore("meta", { keyPath: "key" });
-      }
+      // Rebuild stores to avoid issues where ItemID isn't globally unique
+      if (db.objectStoreNames.contains("items")) db.deleteObjectStore("items");
+      if (db.objectStoreNames.contains("meta")) db.deleteObjectStore("meta");
+
+      const store = db.createObjectStore("items", { keyPath: "_pk" });
+      store.createIndex("bySupplier", "SupplierName", { unique: false });
+      store.createIndex("byRange", "Range", { unique: false });
+      store.createIndex("bySupplierRange", ["SupplierName","Range"], { unique: false });
+
+      db.createObjectStore("meta", { keyPath: "key" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -55,7 +56,7 @@ export async function bulkPutItems(db, items){
     const tx=db.transaction("items","readwrite");
     const store=tx.objectStore("items");
     for(const it of items){
-      if (!it.ItemID) continue;
+      if (!it._pk) continue;
       store.put(it);
     }
     tx.oncomplete=()=>resolve(true);
@@ -72,10 +73,10 @@ export async function countItems(db){
   });
 }
 
-export async function getItem(db, itemId){
+export async function getItem(db, pk){
   return new Promise((resolve,reject)=>{
     const tx=db.transaction("items","readonly");
-    const req=tx.objectStore("items").get(itemId);
+    const req=tx.objectStore("items").get(pk);
     req.onsuccess=()=>resolve(req.result||null);
     req.onerror=()=>reject(req.error);
   });

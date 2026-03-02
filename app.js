@@ -19,15 +19,10 @@ const btnHelp = document.getElementById("btnHelp");
 let db;
 let metaSuppliers = [];
 let metaRangesBySupplier = new Map();
-let selectedItemId = null;
+let selectedPk = null;
 
 function setStatus(msg) { statusBox.textContent = msg; }
-
-function safe(v) {
-  if (v === undefined || v === null) return "";
-  return String(v);
-}
-
+function safe(v) { return (v === undefined || v === null) ? "" : String(v); }
 function normalize(s) { return safe(s).toLowerCase(); }
 function trimVal(v) { return safe(v).trim(); }
 
@@ -112,10 +107,10 @@ function rowMatchesSearch(item, q) {
 
 function highlightSelected() {
   for (const tr of tbody.querySelectorAll("tr")) {
-    tr.style.outline = (tr.dataset.itemid === selectedItemId) ? "2px solid #000" : "none";
+    tr.style.outline = (tr.dataset.pk === selectedPk) ? "2px solid #000" : "none";
   }
   for (const div of resultsList.querySelectorAll(".item")) {
-    div.style.outline = (div.dataset.itemid === selectedItemId) ? "2px solid #000" : "none";
+    div.style.outline = (div.dataset.pk === selectedPk) ? "2px solid #000" : "none";
   }
 }
 
@@ -123,10 +118,10 @@ function renderResults(items) {
   tbody.innerHTML = "";
   for (const it of items) {
     const tr = document.createElement("tr");
-    tr.dataset.itemid = safe(it.ItemID);
+    tr.dataset.pk = safe(it._pk);
     tr.addEventListener("click", async () => {
-      selectedItemId = safe(it.ItemID);
-      renderDetail(await getItem(db, selectedItemId));
+      selectedPk = safe(it._pk);
+      renderDetail(await getItem(db, selectedPk));
       highlightSelected();
     });
     for (const c of DISPLAY_COLS) {
@@ -141,10 +136,10 @@ function renderResults(items) {
   for (const it of items) {
     const div = document.createElement("div");
     div.className = "item";
-    div.dataset.itemid = safe(it.ItemID);
+    div.dataset.pk = safe(it._pk);
     div.addEventListener("click", async () => {
-      selectedItemId = safe(it.ItemID);
-      renderDetail(await getItem(db, selectedItemId));
+      selectedPk = safe(it._pk);
+      renderDetail(await getItem(db, selectedPk));
       highlightSelected();
     });
 
@@ -199,18 +194,13 @@ async function refreshResults() {
 
 function showHelp() {
   alert(
-`Offline use:
-1) Open this app once while online (so it can cache itself).
-2) Tap "Import / Replace" and choose your XLSX file.
-3) After import, it works offline.
+`If you ever see 0 results:
+Tap Import / Replace and re-import the XLSX. This version uses a safer unique key so items are not overwritten.
 
 Filtering:
 - Supplier is sorted by SupplierName and shows "SupplierName — SupplierDebrand"
 - Range shows "Range — Renamed" and filters by Range
-- Barcode is hidden and not searched.
-
-Updating data:
-Export a fresh XLSX from Windows, then Import / Replace again.`
+- Barcode is hidden and not searched.`
   );
 }
 
@@ -268,7 +258,7 @@ async function importXlsxFile(file) {
       it[col] = safe(r[key]);
     }
 
-    // Trim key fields so filters match exactly (common issue with exports)
+    // Trim key fields so filters match exactly
     it.SupplierName = trimVal(it.SupplierName);
     it.SupplierDebrand = trimVal(it.SupplierDebrand);
     it.Range = trimVal(it.Range);
@@ -277,16 +267,18 @@ async function importXlsxFile(file) {
     it.ModelNum = trimVal(it.ModelNum);
     it.SKU = trimVal(it.SKU);
 
-    if (!it.ItemID) continue;
+    if (!it.SupplierName || !it.ItemID) continue;
 
-    const sName = it.SupplierName;
-    const sDeb = it.SupplierDebrand;
-    if (sName && !suppliersMap.has(sName)) suppliersMap.set(sName, sDeb);
+    // Create a unique primary key so items from different suppliers don't overwrite each other
+    it._pk = `${it.SupplierName}||${it.ItemID}`;
 
-    if (sName) {
-      if (!rangesMap.has(sName)) rangesMap.set(sName, new Map());
-      const k = `${it.Range}|||${it.Renamed}`;
-      if (it.Range && !rangesMap.get(sName).has(k)) rangesMap.get(sName).set(k, { Range: it.Range, Renamed: it.Renamed });
+    // Meta
+    if (!suppliersMap.has(it.SupplierName)) suppliersMap.set(it.SupplierName, it.SupplierDebrand);
+
+    if (!rangesMap.has(it.SupplierName)) rangesMap.set(it.SupplierName, new Map());
+    const rk = `${it.Range}|||${it.Renamed}`;
+    if (it.Range && !rangesMap.get(it.SupplierName).has(rk)) {
+      rangesMap.get(it.SupplierName).set(rk, { Range: it.Range, Renamed: it.Renamed });
     }
 
     items.push(it);
@@ -307,8 +299,7 @@ async function importXlsxFile(file) {
     .sort((a,b)=> (a.SupplierName||"").localeCompare(b.SupplierName||""));
 
   const rangesBySupplier = Array.from(rangesMap.entries()).map(([sName, m]) => {
-    const arr = Array.from(m.values())
-      .sort((a,b)=> (a.Range||"").localeCompare(b.Range||""));
+    const arr = Array.from(m.values()).sort((a,b)=> (a.Range||"").localeCompare(b.Range||""));
     return [sName, arr];
   });
 
@@ -351,25 +342,25 @@ async function init() {
   supplierSel.addEventListener("change", async () => {
     populateRangeDropdown(supplierSel.value);
     rangeSel.value = "";
-    selectedItemId = null;
+    selectedPk = null;
     searchBox.value = "";
     await refreshResults();
   });
 
   rangeSel.addEventListener("change", async () => {
-    selectedItemId = null;
+    selectedPk = null;
     await refreshResults();
   });
 
   searchBox.addEventListener("input", async () => {
-    selectedItemId = null;
+    selectedPk = null;
     await refreshResults();
   });
 
   btnClear.addEventListener("click", async () => {
     rangeSel.value = "";
     searchBox.value = "";
-    selectedItemId = null;
+    selectedPk = null;
     await refreshResults();
   });
 
